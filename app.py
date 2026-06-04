@@ -3,17 +3,22 @@ import pandas as pd
 import altair as alt
 import plotly.graph_objects as go
 import numpy as np
-from supabase import create_client
 
 st.set_page_config(page_title="한국 주식 투자 지표", layout="wide", page_icon="📈")
 
 # ── 데이터 로드 ──────────────────────────────────────────────────
 @st.cache_data(ttl=300)
 def load_data():
-    client = create_client(st.secrets["SUPABASE_URL"].rstrip("/"), st.secrets["SUPABASE_KEY"])
-    response = client.table("investment_dashboard").select("*").execute()
-    df = pd.DataFrame(response.data)
-    df = df.rename(columns={"eps": "EPS", "추정per": "추정PER", "psr": "PSR", "eps수익률": "EPS수익률(%)"})
+    try:
+        from supabase import create_client
+        url = st.secrets["SUPABASE_URL"].rstrip("/")
+        key = st.secrets["SUPABASE_KEY"]
+        client = create_client(url, key)
+        response = client.table("investment_dashboard").select("*").execute()
+        df = pd.DataFrame(response.data)
+        df = df.rename(columns={"eps": "EPS", "추정per": "추정PER", "psr": "PSR", "eps수익률": "EPS수익률(%)"})
+    except Exception:
+        df = pd.read_csv("investment_dashboard_v3.csv")
     df = df.dropna(subset=["회사명"])
     df["적자여부"] = df["EPS"] < 0
     df["PER유효"] = (df["추정PER"] > 0) & (df["추정PER"] < 150)
