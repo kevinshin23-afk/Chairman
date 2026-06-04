@@ -3,13 +3,18 @@ import pandas as pd
 import altair as alt
 import plotly.graph_objects as go
 import numpy as np
+from supabase import create_client
 
 st.set_page_config(page_title="한국 주식 투자 지표", layout="wide", page_icon="📈")
 
 # ── 데이터 로드 ──────────────────────────────────────────────────
-@st.cache_data
+@st.cache_data(ttl=300)
 def load_data():
-    df = pd.read_csv("investment_dashboard_v3.csv").dropna(subset=["회사명"])
+    client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
+    response = client.table("investment_dashboard").select("*").execute()
+    df = pd.DataFrame(response.data)
+    df = df.rename(columns={"eps": "EPS", "추정per": "추정PER", "psr": "PSR", "eps수익률": "EPS수익률(%)"})
+    df = df.dropna(subset=["회사명"])
     df["적자여부"] = df["EPS"] < 0
     df["PER유효"] = (df["추정PER"] > 0) & (df["추정PER"] < 150)
     return df
@@ -133,52 +138,49 @@ with tab2:
     st.altair_chart(bar_per + rule, use_container_width=True)
     st.caption("회색 점선 = PER 10배 기준선")
 
-    # BCG 매트릭스: EPS vs 추정PER (Plotly)
-    st.markdown("**밸류에이션 매트릭스 (EPS vs 추정PER)**")
-    scatter_df = per_chart_df[per_chart_df["EPS"] > 0].copy()
+    # BCG 매트릭스: EPS수익률 vs 추정PER (Plotly)
+    st.markdown("**BCG 매트릭스 (EPS수익률 vs 추정PER)**")
+    scatter_df = per_chart_df[per_chart_df["EPS수익률(%)"] > 0].copy()
 
-    eps_mid = float(scatter_df["EPS"].median())
-    per_mid = float(scatter_df["추정PER"].median())
-    x_min   = float(scatter_df["EPS"].min()) * 0.5
-    x_max   = float(scatter_df["EPS"].max()) * 2.0
-    y_max   = float(scatter_df["추정PER"].max()) * 1.2
+    YIELD_MID = 5.0   # EPS수익률 고정 기준선: 5%
+    per_mid   = float(scatter_df["추정PER"].median())
+    x_max_val = float(scatter_df["EPS수익률(%)"].max()) * 1.15
+    y_max_val = float(scatter_df["추정PER"].max()) * 1.2
 
     # 버블 크기 정규화 (15~45px)
-    r = scatter_df["매출액"].max() - scatter_df["매출액"].min()
-    scatter_df["msize"] = 15 + 30 * (scatter_df["매출액"] - scatter_df["매출액"].min()) / (r if r > 0 else 1)
+    rev_range = scatter_df["매출액"].max() - scatter_df["매출액"].min()
+    scatter_df["msize"] = 15 + 30 * (scatter_df["매출액"] - scatter_df["매출액"].min()) / (rev_range if rev_range > 0 else 1)
 
     # 사분면별 버블 색상
     def quad_color(row):
-        if row["EPS"] >= eps_mid and row["추정PER"] < per_mid:
-            return "#27ae60"   # 매수기회 - 초록
-        elif row["EPS"] >= eps_mid and row["추정PER"] >= per_mid:
-            return "#2980b9"   # 성장주 - 파랑
-        elif row["EPS"] < eps_mid and row["추정PER"] >= per_mid:
-            return "#e74c3c"   # 위험 - 빨강
-        else:
-            return "#e67e22"   # 경기민감 - 주황
+        hi = row["EPS수익률(%)"] >= YIELD_MID
+        lo = row["추정PER"] < per_mid
+        if hi and lo:      return "#27ae60"  # 가치 우량주 - 초록
+        if hi and not lo:  return "#2980b9"  # 우량 성장주 - 파랑
+        if not hi and lo:  return "#e67e22"  # 물음표 - 주황
+        return "#e74c3c"                     # 위험 - 빨강
     scatter_df["bcolor"] = scatter_df.apply(quad_color, axis=1)
 
     fig = go.Figure()
 
     # 4분면 배경 사각형
-    for x0, x1, y0, y1, color in [
-        (x_min,   eps_mid, 0,       per_mid, "rgba(255,243,180,0.45)"),  # 경기민감 - 노랑
-        (eps_mid, x_max,   0,       per_mid, "rgba(180,235,180,0.45)"),  # 매수기회 - 초록
-        (x_min,   eps_mid, per_mid, y_max,   "rgba(255,180,180,0.45)"),  # 위험 - 빨강
-        (eps_mid, x_max,   per_mid, y_max,   "rgba(180,210,255,0.45)"),  # 성장주 - 파랑
+    for x0, x1, y0, y1, fill in [
+        (0,         YIELD_MID, 0,       per_mid,   "rgba(255,243,180,0.45)"),  # 물음표 - 노랑
+        (YIELD_MID, x_max_val, 0,       per_mid,   "rgba(180,235,180,0.45)"),  # 가치 우량주 - 초록
+        (0,         YIELD_MID, per_mid, y_max_val, "rgba(255,180,180,0.45)"),  # 위험 - 빨강
+        (YIELD_MID, x_max_val, per_mid, y_max_val, "rgba(180,210,255,0.45)"),  # 우량 성장주 - 파랑
     ]:
         fig.add_shape(type="rect", xref="x", yref="y",
                       x0=x0, x1=x1, y0=y0, y1=y1,
-                      fillcolor=color, line_width=0, layer="below")
+                      fillcolor=fill, line_width=0, layer="below")
 
     # 기준선
-    fig.add_vline(x=eps_mid, line_dash="dash", line_color="#999", line_width=1.5)
-    fig.add_hline(y=per_mid, line_dash="dash", line_color="#999", line_width=1.5)
+    fig.add_vline(x=YIELD_MID, line_dash="dash", line_color="#999", line_width=1.5)
+    fig.add_hline(y=per_mid,   line_dash="dash", line_color="#999", line_width=1.5)
 
     # 버블 + 회사명
     fig.add_trace(go.Scatter(
-        x=scatter_df["EPS"],
+        x=scatter_df["EPS수익률(%)"],
         y=scatter_df["추정PER"],
         mode="markers+text",
         text=scatter_df["회사명"],
@@ -190,57 +192,57 @@ with tab2:
             opacity=0.88,
             line=dict(color="white", width=2),
         ),
-        customdata=scatter_df[["주가", "EPS", "추정PER", "매출액"]].values,
+        customdata=scatter_df[["주가", "EPS", "EPS수익률(%)", "추정PER", "매출액"]].values,
         hovertemplate=(
             "<b>%{text}</b><br>"
             "주가: %{customdata[0]:,.0f}원<br>"
-            "예상EPS: %{customdata[1]:,.0f}원<br>"
-            "추정PER: %{customdata[2]:.2f}배<br>"
-            "매출액: %{customdata[3]:,.0f}억"
+            "EPS: %{customdata[1]:,.0f}원<br>"
+            "EPS수익률: %{customdata[2]:.2f}%<br>"
+            "추정PER: %{customdata[3]:.2f}배<br>"
+            "매출액: %{customdata[4]:,.0f}억"
             "<extra></extra>"
         ),
     ))
 
-    # 사분면 코너 라벨 (paper 좌표 고정 → 데이터와 절대 안 겹침)
+    # 사분면 코너 라벨
     for x, y, xanchor, yanchor, color, label in [
-        (0.02, 0.97, "left",  "top",    "#c0392b", "⚠ 위험<br><sup>저EPS · 고PER</sup>"),
-        (0.98, 0.97, "right", "top",    "#1a5276", "★ 성장주<br><sup>고EPS · 고PER</sup>"),
-        (0.02, 0.03, "left",  "bottom", "#784212", "◆ 경기민감<br><sup>저EPS · 저PER</sup>"),
-        (0.98, 0.03, "right", "bottom", "#1e8449", "✔ 매수기회<br><sup>고EPS · 저PER</sup>"),
+        (0.02, 0.97, "left",  "top",    "#c0392b", "⚠ 위험<br><sup>저수익률 · 고PER</sup>"),
+        (0.98, 0.97, "right", "top",    "#1a5276", "💎 우량 성장주<br><sup>고수익률 · 고PER</sup>"),
+        (0.02, 0.03, "left",  "bottom", "#784212", "❓ 물음표<br><sup>저수익률 · 저PER</sup>"),
+        (0.98, 0.03, "right", "bottom", "#1e8449", "🌟 가치 우량주<br><sup>고수익률 · 저PER</sup>"),
     ]:
         fig.add_annotation(
             x=x, y=y, xref="paper", yref="paper",
             text=label, showarrow=False,
-            font=dict(size=14, color=color, family="Arial"),
+            font=dict(size=13, color=color, family="Arial"),
             align="center", xanchor=xanchor, yanchor=yanchor,
             bgcolor="rgba(255,255,255,0.75)", borderpad=5,
         )
 
     fig.update_layout(
         xaxis=dict(
-            type="log",
-            title="EPS — 2026년 예상 (원, 로그스케일)",
-            range=[np.log10(x_min), np.log10(x_max)],
+            title="EPS 수익률 (%) = EPS ÷ 현재주가 × 100  →  높을수록 저평가",
+            range=[0, x_max_val],
             gridcolor="#eeeeee", showgrid=True,
         ),
         yaxis=dict(
-            title="추정PER (배)",
-            range=[0, y_max],
+            title="추정 PER (배)  →  낮을수록 저평가",
+            range=[0, y_max_val],
             gridcolor="#eeeeee", showgrid=True,
         ),
-        height=600,
+        height=620,
         paper_bgcolor="white",
         plot_bgcolor="white",
         showlegend=False,
         margin=dict(l=60, r=40, t=50, b=60),
         title=dict(
-            text=f"기준선: EPS 중앙값 {eps_mid:,.0f}원 / 추정PER 중앙값 {per_mid:.1f}배",
+            text=f"기준선: EPS수익률 {YIELD_MID}% (고정) / 추정PER 중앙값 {per_mid:.1f}배",
             font=dict(size=12, color="gray"), x=0.5,
         ),
     )
 
     st.plotly_chart(fig, use_container_width=True)
-    st.caption("버블 크기 = 매출액 규모 | X축 로그스케일 | 기준선 = 중앙값")
+    st.caption("버블 크기 = 매출액 규모 | X축: EPS수익률(%) 높을수록 수익성 우수 | Y축: PER 낮을수록 저평가")
 
 # ── 탭3: PSR & 매출액 ─────────────────────────────────────────────
 with tab3:
