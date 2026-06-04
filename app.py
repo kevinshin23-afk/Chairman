@@ -9,7 +9,7 @@ st.set_page_config(page_title="한국 주식 투자 지표", layout="wide", page
 # ── 데이터 로드 ──────────────────────────────────────────────────
 @st.cache_data
 def load_data():
-    df = pd.read_csv("C:/kay/investment_dashboard_v3.csv").dropna(subset=["회사명"])
+    df = pd.read_csv("investment_dashboard_v3.csv").dropna(subset=["회사명"])
     df["적자여부"] = df["EPS"] < 0
     df["PER유효"] = (df["추정PER"] > 0) & (df["추정PER"] < 150)
     return df
