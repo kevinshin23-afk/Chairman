@@ -10,7 +10,7 @@ st.set_page_config(page_title="한국 주식 투자 지표", layout="wide", page
 # ── 데이터 로드 ──────────────────────────────────────────────────
 @st.cache_data(ttl=300)
 def load_data():
-    client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
+    client = create_client(st.secrets["SUPABASE_URL"].rstrip("/"), st.secrets["SUPABASE_KEY"])
     response = client.table("investment_dashboard").select("*").execute()
     df = pd.DataFrame(response.data)
     df = df.rename(columns={"eps": "EPS", "추정per": "추정PER", "psr": "PSR", "eps수익률": "EPS수익률(%)"})
