@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BCG 투자 매트릭스 - EPS수익률 vs 추정PER</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+    background: #0d1117;
+    color: #c9d1d9;
+    min-height: 100vh;
+    padding: 28px 20px;
+}
+h1 {
+    text-align: center;
+    color: #f0f6fc;
+    font-size: 1.55rem;
+    margin-bottom: 6px;
+    letter-spacing: -0.5px;
+}
+.subtitle {
+    text-align: center;
+    color: #8b949e;
+    font-size: 0.82rem;
+    margin-bottom: 22px;
+    line-height: 1.6;
+}
+.subtitle strong { color: #c9d1d9; }
+.chart-wrap {
+    position: relative;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 14px;
+    padding: 20px 24px 16px;
+    max-width: 980px;
+    margin: 0 auto 20px;
+}
+.axis-label-x {
+    display: flex;
+    justify-content: space-between;
+    padding: 0 60px 0 60px;
+    font-size: 0.75rem;
+    color: #8b949e;
+    margin-top: 2px;
+}
+.legend-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    max-width: 980px;
+    margin: 0 auto 20px;
+}
+.legend-card {
+    padding: 12px 16px;
+    border-radius: 10px;
+    border: 1px solid;
+    font-size: 0.8rem;
+    line-height: 1.55;
+}
+.legend-card .ct { font-weight: bold; font-size: 0.88rem; margin-bottom: 3px; }
+.lg { background: rgba(34,197,94,0.08); border-color: rgba(34,197,94,0.25); }
+.lg .ct { color: #4ade80; }
+.lb { background: rgba(96,165,250,0.08); border-color: rgba(96,165,250,0.25); }
+.lb .ct { color: #60a5fa; }
+.ly { background: rgba(250,204,21,0.08); border-color: rgba(250,204,21,0.25); }
+.ly .ct { color: #facc15; }
+.lr { background: rgba(248,113,113,0.08); border-color: rgba(248,113,113,0.25); }
+.lr .ct { color: #f87171; }
+.data-table {
+    max-width: 980px;
+    margin: 0 auto;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 14px;
+    overflow: hidden;
+}
+.tbl-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px;
+    background: #21262d;
+    border-bottom: 1px solid #30363d;
+}
+.tbl-header .ttl { color: #f0f6fc; font-size: 0.88rem; font-weight: bold; }
+.tbl-header .note { color: #8b949e; font-size: 0.75rem; }
+table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+th {
+    background: #21262d;
+    color: #8b949e;
+    text-align: center;
+    padding: 9px 10px;
+    border-bottom: 1px solid #30363d;
+    font-weight: 500;
+    white-space: nowrap;
+}
+td {
+    text-align: center;
+    padding: 8px 10px;
+    border-bottom: 1px solid #21262d;
+    white-space: nowrap;
+}
+td:first-child { text-align: left; font-weight: 500; padding-left: 16px; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(255,255,255,0.025); }
+.pos { color: #4ade80; font-weight: bold; }
+.neg { color: #f87171; font-weight: bold; }
+.mid { color: #c9d1d9; }
+.tag {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-weight: bold;
+}
+.tag-g { background: rgba(34,197,94,0.15); color: #4ade80; }
+.tag-b { background: rgba(96,165,250,0.15); color: #60a5fa; }
+.tag-y { background: rgba(250,204,21,0.15); color: #facc15; }
+.tag-r { background: rgba(248,113,113,0.15); color: #f87171; }
+.formula-box {
+    max-width: 980px;
+    margin: 0 auto 20px;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 14px 20px;
+    display: flex;
+    gap: 40px;
+    flex-wrap: wrap;
+}
+.formula-item { font-size: 0.82rem; }
+.formula-item .label { color: #8b949e; margin-bottom: 4px; }
+.formula-item .val { color: #f0f6fc; font-size: 0.92rem; font-weight: bold; font-family: monospace; }
+</style>
+</head>
+<body>
+
+<h1>📊 BCG 투자 매트릭스</h1>
+<p class="subtitle">
+    <strong>X축: 추정 PER</strong> (낮을수록 저평가) &nbsp;|&nbsp;
+    <strong>Y축: EPS 수익률 = EPS ÷ 현재주가 × 100%</strong> (높을수록 현재 수익성 우수)<br>
+    기준선: PER <strong>20배</strong> · EPS 수익률 <strong>5%</strong> &nbsp;|&nbsp; 원 크기 = 매출액 규모
+</p>
+
+<div class="formula-box">
+    <div class="formula-item">
+        <div class="label">EPS 수익률 (수익률 관점)</div>
+        <div class="val">EPS ÷ 주가 × 100 = 주당순이익/주가</div>
+    </div>
+    <div class="formula-item">
+        <div class="label">PER과의 관계</div>
+        <div class="val">EPS 수익률 ≈ 1/PER × 100  (역수 관계)</div>
+    </div>
+    <div class="formula-item">
+        <div class="label">차이점 (핵심)</div>
+        <div class="val">추정PER = 미래 EPS 기준 · EPS수익률 = 현재 EPS 기준</div>
+    </div>
+</div>
+
+<div class="chart-wrap">
+    <canvas id="bcgChart" height="420"></canvas>
+</div>
+
+<div class="legend-grid">
+    <div class="legend-card lg">
+        <div class="ct">🌟 가치 우량주 (좌상단) — 최우선 주목</div>
+        PER 낮음 + EPS 수익률 높음: 현재 이익이 충분하고 주가도 저렴.<br>
+        삼성전자 · SK하이닉스 · 기아 · SK이노베이션 · 한국전력 등
+    </div>
+    <div class="legend-card lb">
+        <div class="ct">💎 우량 성장주 (우상단) — 선별 투자</div>
+        PER 높음 + EPS 수익률 높음: 수익성 좋지만 시장이 이미 프리미엄 부여.<br>
+        현재 수익성 좋고 성장 기대도 높은 희귀 구간
+    </div>
+    <div class="legend-card ly">
+        <div class="ct">❓ 물음표 (좌하단) — 턴어라운드 주목</div>
+        PER 낮음 + EPS 수익률 낮음/마이너스: 주가는 싸지만 현재 수익성 부진.<br>
+        롯데케미칼 등 적자 전환 또는 회복 대기 종목
+    </div>
+    <div class="legend-card lr">
+        <div class="ct">⚠ 성장 프리미엄 (우하단) — 신중 검토</div>
+        PER 높음 + EPS 수익률 낮음: 미래 성장에 베팅하는 구간.<br>
+        바이오·배터리·IT 등 현재 수익보다 성장성으로 평가되는 종목
+    </div>
+</div>
+
+<div class="data-table">
+    <div class="tbl-header">
+        <span class="ttl">📋 전체 종목 데이터 (EPS 수익률 높은 순)</span>
+        <span class="note">* PER &gt; 52배 종목은 차트에서 우측 끝에 표시됨</span>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>회사명</th>
+                <th>현재주가(원)</th>
+                <th>EPS(원)</th>
+                <th>EPS수익률(%)</th>
+                <th>추정PER(배)</th>
+                <th>차이(수익률-1/PER)</th>
+                <th>PSR</th>
+                <th>매출액(억)</th>
+                <th>구분</th>
+            </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+    </table>
+</div>
+
+<script>
+Chart.register(ChartDataLabels);
+
+const MID_PER = 20, MID_YIELD = 5, MAX_PER = 52;
+
+const stocks = [
+    { n:'삼성전자',    p:360500,   eps:42923,  per:7.37,   psr:1.8, rev:302000 },
+    { n:'SK하이닉스',  p:2360000,  eps:296971, per:6.79,   psr:2.1, rev:66200  },
+    { n:'LG에너지솔루션',p:442500, eps:-1073,  per:203.15, psr:3.2, rev:33400  },
+    { n:'현대차',      p:729000,   eps:39653,  per:17.54,  psr:0.4, rev:162700 },
+    { n:'기아',        p:168800,   eps:21310,  per:7.57,   psr:0.4, rev:99800  },
+    { n:'POSCO홀딩스', p:399000,   eps:23631,  per:14.86,  psr:0.3, rev:77200  },
+    { n:'삼성바이오로직스',p:1367000,eps:42462, per:30.05,  psr:14.6,rev:36800  },
+    { n:'셀트리온',    p:187900,   eps:6547,   per:26.43,  psr:8.2, rev:23100  },
+    { n:'카카오',      p:42550,    eps:1566,   per:24.68,  psr:4.1, rev:71300  },
+    { n:'네이버',      p:280500,   eps:12505,  per:20.49,  psr:3.6, rev:97800  },
+    { n:'LG화학',      p:355000,   eps:3361,   per:26.41,  psr:0.7, rev:51200  },
+    { n:'SK이노베이션', p:116300,  eps:11759,  per:12.61,  psr:0.2, rev:73400  },
+    { n:'롯데케미칼',  p:77400,    eps:-5792,  per:0,      psr:0.2, rev:18900  },
+    { n:'한국전력',    p:37750,    eps:8903,   per:3.63,   psr:0.4, rev:87300  },
+    { n:'두산에너빌리티',p:100000,  eps:458,    per:156.47, psr:1.2, rev:17600  },
+    { n:'한화에어로스페이스',p:1070000,eps:41659,per:22.46, psr:1.8, rev:24500  },
+    { n:'삼성SDI',     p:602000,   eps:5295,   per:49.21,  psr:1.4, rev:22800  },
+    { n:'LG전자',      p:392500,   eps:10858,  per:32.48,  psr:0.3, rev:84200  },
+    { n:'현대모비스',  p:759000,   eps:45655,  per:15.64,  psr:0.4, rev:58300  },
+    { n:'SK텔레콤',    p:125200,   eps:5668,   per:21.16,  psr:0.9, rev:17800  },
+].map(s => ({
+    ...s,
+    epsYield: parseFloat((s.eps / s.p * 100).toFixed(2)),
+    shortName: s.n
+        .replace('삼성바이오로직스','삼성바이오')
+        .replace('한화에어로스페이스','한화에어로')
+        .replace('LG에너지솔루션','LG에너지')
+        .replace('두산에너빌리티','두산에너빌')
+        .replace('SK이노베이션','SK이노')
+        .replace('POSCO홀딩스','POSCO'),
+}));
+
+function quadrant(per, y) {
+    const px = (per === 0 ? 1 : Math.min(per, MAX_PER));
+    if (px <= MID_PER && y >= MID_YIELD) return 'g';
+    if (px >  MID_PER && y >= MID_YIELD) return 'b';
+    if (px <= MID_PER && y <  MID_YIELD) return 'y';
+    return 'r';
+}
+
+const COLORS = {
+    g: { bg:'rgba(34,197,94,0.82)',  border:'#22c55e' },
+    b: { bg:'rgba(96,165,250,0.82)', border:'#60a5fa' },
+    y: { bg:'rgba(250,204,21,0.82)', border:'#facc15' },
+    r: { bg:'rgba(248,113,113,0.75)',border:'#f87171' },
+};
+
+const LABELS_ALIGN = {
+    'SK하이닉스':'top', '기아':'right', '삼성전자':'bottom',
+    '한국전력':'right', 'SK이노':'bottom', 'POSCO':'left',
+    '현대모비스':'top', '현대차':'left',
+    '네이버':'bottom', 'SK텔레콤':'top',
+    '셀트리온':'top', '카카오':'bottom',
+    '한화에어로':'left', 'LG화학':'bottom',
+    '두산에너빌':'top', 'LG에너지':'bottom',
+    '롯데케미칼':'bottom',
+};
+
+function radius(rev) {
+    return Math.max(7, Math.min(22, Math.sqrt(rev / 1100)));
+}
+
+// Build 4 datasets by quadrant
+const qLabels = { g:'🌟 가치 우량주', b:'💎 우량 성장주', y:'❓ 물음표', r:'⚠ 성장 프리미엄' };
+const datasets = ['g','b','y','r'].map(q => ({
+    label: qLabels[q],
+    backgroundColor: COLORS[q].bg,
+    borderColor: COLORS[q].border,
+    borderWidth: 1.5,
+    data: stocks
+        .filter(s => quadrant(s.per, s.epsYield) === q)
+        .map(s => ({
+            x: s.per === 0 ? 1 : Math.min(s.per, MAX_PER),
+            y: s.epsYield,
+            r: radius(s.rev),
+            name: s.n,
+            short: s.shortName,
+            eps: s.eps,
+            price: s.p,
+            per: s.per,
+            psr: s.psr,
+            rev: s.rev,
+            epsYield: s.epsYield,
+            isOutlier: s.per > MAX_PER || s.per === 0,
+        })),
+}));
+
+// Custom quadrant background + midlines plugin
+const bgPlugin = {
+    id: 'bgPlugin',
+    beforeDraw(chart) {
+        const {ctx, chartArea:{left,right,top,bottom}, scales:{x,y}} = chart;
+        const mx = x.getPixelForValue(MID_PER);
+        const my = y.getPixelForValue(MID_YIELD);
+
+        const fills = [
+            ['rgba(34,197,94,0.07)',   left, top,  mx-left,    my-top],
+            ['rgba(96,165,250,0.05)',  mx,   top,  right-mx,   my-top],
+            ['rgba(250,204,21,0.06)',  left, my,   mx-left,    bottom-my],
+            ['rgba(248,113,113,0.07)', mx,   my,   right-mx,   bottom-my],
+        ];
+        fills.forEach(([c,...r]) => { ctx.fillStyle=c; ctx.fillRect(...r); });
+
+        // Midlines
+        ctx.save();
+        ctx.setLineDash([5,4]);
+        ctx.strokeStyle = 'rgba(255,255,255,0.13)';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(mx,top); ctx.lineTo(mx,bottom); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(left,my); ctx.lineTo(right,my); ctx.stroke();
+        ctx.restore();
+
+        // Quadrant corner labels
+        const ql = [
+            ['rgba(74,222,128,0.55)',  '🌟 가치 우량주',    left+10, top+22],
+            ['rgba(96,165,250,0.45)',  '💎 우량 성장주',    mx+10,   top+22],
+            ['rgba(250,204,21,0.55)',  '❓ 물음표',         left+10, bottom-10],
+            ['rgba(248,113,113,0.55)','⚠ 성장 프리미엄',   mx+10,   bottom-10],
+        ];
+        ctx.font = 'bold 12px Malgun Gothic, sans-serif';
+        ql.forEach(([c,t,tx,ty]) => { ctx.fillStyle=c; ctx.fillText(t,tx,ty); });
+    }
+};
+
+const canvas = document.getElementById('bcgChart');
+new Chart(canvas, {
+    type: 'bubble',
+    plugins: [bgPlugin, ChartDataLabels],
+    data: { datasets },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            x: {
+                min: 0, max: 55,
+                title: {
+                    display: true,
+                    text: '← 저평가 (추정 PER, 배)  고평가 →',
+                    color: '#8b949e',
+                    font: { size: 12 }
+                },
+                ticks: {
+                    color: '#8b949e',
+                    callback: v => v + '배'
+                },
+                grid: { color: 'rgba(255,255,255,0.05)' },
+                border: { color: '#30363d' }
+            },
+            y: {
+                min: -12, max: 27,
+                title: {
+                    display: true,
+                    text: 'EPS 수익률 (%) = EPS ÷ 주가 × 100',
+                    color: '#8b949e',
+                    font: { size: 12 }
+                },
+                ticks: {
+                    color: '#8b949e',
+                    callback: v => v + '%'
+                },
+                grid: { color: 'rgba(255,255,255,0.05)' },
+                border: { color: '#30363d' }
+            }
+        },
+        plugins: {
+            legend: {
+                display: true,
+                position: 'top',
+                labels: {
+                    color: '#c9d1d9',
+                    usePointStyle: true,
+                    pointStyle: 'circle',
+                    padding: 18,
+                    font: { size: 12 }
+                }
+            },
+            tooltip: {
+                backgroundColor: '#1c2128',
+                borderColor: '#30363d',
+                borderWidth: 1,
+                titleColor: '#f0f6fc',
+                bodyColor: '#c9d1d9',
+                titleFont: { size: 13, weight: 'bold' },
+                bodyFont: { size: 12 },
+                padding: 12,
+                callbacks: {
+                    title: ([item]) => {
+                        const d = item.raw;
+                        return d.name + (d.isOutlier ? '  ⚠ (PER 차트초과)' : '');
+                    },
+                    label: (item) => {
+                        const d = item.raw;
+                        const actualPer = d.per === 0 ? 'N/A (적자)' : d.per.toFixed(2) + '배';
+                        const fwdYield = d.per > 0 ? (100/d.per).toFixed(2)+'%' : 'N/A';
+                        return [
+                            `현재주가: ${d.price.toLocaleString()}원`,
+                            `EPS: ${d.eps.toLocaleString()}원`,
+                            `EPS 수익률 (현재): ${d.epsYield.toFixed(2)}%`,
+                            `추정 PER: ${actualPer}`,
+                            `추정 EPS 수익률 (선행): ${fwdYield}`,
+                            `PSR: ${d.psr}`,
+                            `매출액: ${d.rev.toLocaleString()}억원`,
+                        ];
+                    }
+                }
+            },
+            datalabels: {
+                color: '#f0f6fc',
+                font: { size: 10, weight: 'bold' },
+                textStrokeColor: 'rgba(0,0,0,0.85)',
+                textStrokeWidth: 3,
+                formatter: (v) => v.short || v.name,
+                anchor: 'end',
+                align: (ctx) => {
+                    const d = ctx.dataset.data[ctx.dataIndex];
+                    const key = d.short || d.name;
+                    return LABELS_ALIGN[key] || 'top';
+                },
+                offset: 4,
+                display: true,
+            }
+        }
+    }
+});
+
+// ── Data table ─────────────────────────────────────────────────────────────
+const tbody = document.getElementById('tbody');
+const sorted = [...stocks].sort((a,b) => b.epsYield - a.epsYield);
+
+sorted.forEach(s => {
+    const q = quadrant(s.per, s.epsYield);
+    const tagMap = {
+        g: '<span class="tag tag-g">🌟 가치 우량주</span>',
+        b: '<span class="tag tag-b">💎 우량 성장주</span>',
+        y: '<span class="tag tag-y">❓ 물음표</span>',
+        r: '<span class="tag tag-r">⚠ 성장 프리미엄</span>',
+    };
+
+    const perText = s.per === 0
+        ? '<span class="neg">N/A</span>'
+        : s.per > MAX_PER
+            ? `<span class="neg">${s.per.toFixed(2)}*</span>`
+            : `<span class="mid">${s.per.toFixed(2)}</span>`;
+
+    // Divergence: trailing yield - forward implied yield (1/per * 100)
+    let diffText = '-';
+    if (s.per > 0) {
+        const fwd = 100 / s.per;
+        const diff = s.epsYield - fwd;
+        const cls = diff > 0 ? 'pos' : 'neg';
+        diffText = `<span class="${cls}">${diff >= 0 ? '+' : ''}${diff.toFixed(2)}%p</span>`;
+    }
+
+    const yClass = s.epsYield >= MID_YIELD ? 'pos' : s.epsYield < 0 ? 'neg' : 'mid';
+
+    tbody.innerHTML += `<tr>
+        <td>${s.n}</td>
+        <td>${s.p.toLocaleString()}</td>
+        <td class="${s.eps < 0 ? 'neg' : 'mid'}">${s.eps.toLocaleString()}</td>
+        <td class="${yClass}">${s.epsYield.toFixed(2)}%</td>
+        <td>${perText}</td>
+        <td>${diffText}</td>
+        <td>${s.psr}</td>
+        <td>${s.rev.toLocaleString()}</td>
+        <td>${tagMap[q]}</td>
+    </tr>`;
+});
+</script>
+</body>
+</html>
